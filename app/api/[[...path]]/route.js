@@ -8,8 +8,8 @@ import { writeFile } from 'fs/promises';
 import nodePath from 'path';
 import { put } from '@vercel/blob';
 
-const uri = process.env.MONGO_URL;
-const dbName = process.env.DB_NAME;
+const uri ="mongodb+srv://biblio_db_user:rCeHHjhzP0KZpuaT@cluster0.gjsk6tp.mongodb.net";
+const dbName ="immersive_library";
 
 let cachedClient = null;
 let cachedDb = null;
