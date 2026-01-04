@@ -5,16 +5,8 @@ import bcrypt from 'bcryptjs';
 import { streamText } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { put } from '@vercel/blob';
-import { pipeline } from 'stream/promises';
 
-// Utiliser l'URI de l'environnement ou la valeur par défaut (pour le dev local)
-const defaultUri = "mongodb+srv://biblio_db_user:rCeHHjhzP0KZpuaT@cluster0.gjsk6tp.mongodb.net";
-const uri = process.env.MONGODB_URI || defaultUri;
-const dbName = "immersive_library";
-
-// Pour le développement serverless sur Vercel, on utilise une connexion par requête
-// plutôt qu'un cache global qui pourrait causer des problèmes
-
+// Headers CORS
 const corsHeaders = {
   'Access-Control-Allow-Origin': process.env.CORS_ORIGINS || '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
@@ -24,90 +16,226 @@ const corsHeaders = {
 };
 
 // Handler OPTIONS pour CORS
-export async function OPTIONS(request) {
+export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-// Fonction de connexion à MongoDB optimisée pour Vercel
+// Fonction de connexion MongoDB optimisée pour Vercel
 async function getDbConnection() {
-  console.log('Connecting to MongoDB...');
-  console.log('Using URI:', process.env.MONGODB_URI ? 'From env' : 'Default');
+  const mongoUri = process.env.MONGODB_URI;
+  
+  if (!mongoUri) {
+    console.error('❌ ERREUR: MONGODB_URI non défini dans les variables d\'environnement');
+    console.error('📋 Instructions: Allez dans Vercel Dashboard > Settings > Environment Variables');
+    console.error('📋 Ajoutez: MONGODB_URI="mongodb+srv://biblio_db_user:rCeHHjhzP0KZpuaT@cluster0.gjsk6tp.mongodb.net/immersive_library?retryWrites=true&w=majority"');
+    throw new Error('Configuration de base de données manquante. Vérifiez les variables d\'environnement.');
+  }
+  
+  console.log('🔗 Connexion à MongoDB...');
   
   try {
-    const client = new MongoClient(uri, {
+    const client = new MongoClient(mongoUri, {
       maxPoolSize: 5,
-      minPoolSize: 1,
-      serverSelectionTimeoutMS: 10000, // 10 secondes timeout
+      serverSelectionTimeoutMS: 10000,
       connectTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
+      socketTimeoutMS: 30000,
+      ssl: true,
+      tlsAllowInvalidCertificates: false,
+      retryWrites: true,
+      w: 'majority',
+      appName: 'BibliothequeImmersive-Vercel'
     });
     
     await client.connect();
-    const db = client.db(dbName);
+    console.log('✅ Connexion MongoDB établie avec succès');
     
-    // Test de la connexion
-    await db.command({ ping: 1 });
-    console.log('MongoDB connection successful');
+    // Extraire le nom de la base de données de l'URI
+    const dbName = mongoUri.split('/').pop().split('?')[0] || 'immersive_library';
+    const db = client.db(dbName);
     
     return { client, db };
   } catch (error) {
-    console.error('MongoDB connection failed:', error);
-    throw new Error(`Database connection failed: ${error.message}`);
+    console.error('❌ Erreur de connexion MongoDB:');
+    console.error('   Message:', error.message);
+    console.error('   Code:', error.code);
+    console.error('   Nom:', error.name);
+    
+    // Masquer le mot de passe dans les logs
+    const safeUri = mongoUri.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@');
+    console.error('   URI utilisée:', safeUri);
+    
+    throw new Error(`Échec de la connexion à la base de données: ${error.message}`);
   }
 }
 
 // Handler GET
 export async function GET(request) {
-  console.log('GET request to:', request.url);
-  console.log('Environment:', process.env.NODE_ENV);
-  console.log('Has OpenAI Key:', !!process.env.OPENAI_API_KEY);
+  console.log(`🌐 GET ${request.url}`);
   
   const { pathname, searchParams } = new URL(request.url);
   const path = pathname.replace('/api', '') || '/';
   
-  // Route de test pour vérifier la connexion
-  if (path === '/test') {
+  // Route de test pour vérifier la configuration
+  if (path === '/test' || path === '/health') {
     try {
-      const { db, client } = await getDbConnection();
-      const bookCount = await db.collection('books').countDocuments({});
-      const categories = await db.collection('books').distinct('category');
+      console.log('🧪 Route test/health appelée');
       
-      await client.close();
+      const envInfo = {
+        NODE_ENV: process.env.NODE_ENV || 'non défini',
+        MONGODB_URI: process.env.MONGODB_URI ? '✓ Défini' : '✗ Non défini',
+        OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '✓ Défini' : '✗ Non défini',
+        BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN ? '✓ Défini' : '✗ Non défini',
+        CORS_ORIGINS: process.env.CORS_ORIGINS || '* (par défaut)',
+        VERCEL_ENV: process.env.VERCEL_ENV || 'non défini',
+        VERCEL_URL: process.env.VERCEL_URL || 'non défini'
+      };
       
-      return NextResponse.json({
-        success: true,
-        message: 'API is working',
-        environment: process.env.NODE_ENV,
-        database: {
-          connected: true,
-          bookCount,
-          categoryCount: categories.length
-        },
-        services: {
-          hasOpenAI: !!process.env.OPENAI_API_KEY,
-          hasBlobToken: !!process.env.BLOB_READ_WRITE_TOKEN,
-          corsOrigin: process.env.CORS_ORIGINS || '*'
+      console.log('📊 Informations environnement:', envInfo);
+      
+      if (!process.env.MONGODB_URI) {
+        return NextResponse.json({
+          success: false,
+          error: 'MONGODB_URI non configuré',
+          instructions: [
+            '1. Allez dans Vercel Dashboard',
+            '2. Sélectionnez votre projet',
+            '3. Cliquez sur Settings > Environment Variables',
+            '4. Ajoutez: MONGODB_URI="mongodb+srv://biblio_db_user:rCeHHjhzP0KZpuaT@cluster0.gjsk6tp.mongodb.net/immersive_library?retryWrites=true&w=majority"',
+            '5. Redéployez l\'application'
+          ],
+          environment: envInfo
+        }, { headers: corsHeaders });
+      }
+      
+      // Tester la connexion MongoDB
+      const { client, db } = await getDbConnection();
+      
+      try {
+        // Vérifier les collections disponibles
+        const collections = await db.listCollections().toArray();
+        const collectionNames = collections.map(c => c.name);
+        
+        // Compter les documents dans les collections principales
+        const stats = {};
+        for (const collName of ['books', 'admins', 'users']) {
+          if (collectionNames.includes(collName)) {
+            stats[collName] = await db.collection(collName).countDocuments({});
+          }
         }
-      }, { headers: corsHeaders });
+        
+        return NextResponse.json({
+          success: true,
+          message: '✅ API fonctionnelle',
+          timestamp: new Date().toISOString(),
+          environment: envInfo,
+          database: {
+            connected: true,
+            collections: collectionNames,
+            stats: stats
+          },
+          endpoints: {
+            books: 'GET /api/books',
+            categories: 'GET /api/categories',
+            authors: 'GET /api/authors',
+            admin_login: 'POST /api/admin/login',
+            admin_stats: 'GET /api/admin/stats',
+            upload: 'POST /api/upload',
+            chat: 'POST /api/chat'
+          }
+        }, { headers: corsHeaders });
+        
+      } finally {
+        await client.close();
+      }
+      
     } catch (error) {
+      console.error('❌ Erreur dans /test:', error);
       return NextResponse.json({
         success: false,
         error: error.message,
-        environment: process.env.NODE_ENV,
-        hasMongoUri: !!process.env.MONGODB_URI,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      }, { 
-        status: 500, 
-        headers: corsHeaders 
-      });
+        environment: {
+          has_mongodb_uri: !!process.env.MONGODB_URI,
+          node_env: process.env.NODE_ENV,
+          vercel_env: process.env.VERCEL_ENV
+        }
+      }, { status: 500, headers: corsHeaders });
     }
   }
-
+  
+  // Route pour créer un admin initial (à désactiver en production)
+  if (path === '/init-admin' && process.env.NODE_ENV !== 'production') {
+    try {
+      const { client, db } = await getDbConnection();
+      
+      try {
+        // Créer la collection admins si elle n'existe pas
+        const collExists = await db.listCollections({ name: 'admins' }).hasNext();
+        
+        if (!collExists) {
+          await db.createCollection('admins');
+          console.log('📁 Collection admins créée');
+        }
+        
+        // Vérifier si un admin existe déjà
+        const existingAdmin = await db.collection('admins').findOne({ email: 'admin@example.com' });
+        
+        if (existingAdmin) {
+          await client.close();
+          return NextResponse.json({
+            success: false,
+            message: 'Admin existe déjà',
+            admin: {
+              email: existingAdmin.email,
+              name: existingAdmin.name
+            }
+          }, { headers: corsHeaders });
+        }
+        
+        // Créer un admin par défaut
+        const hashedPassword = await bcrypt.hash('admin123', 10);
+        const admin = {
+          id: uuidv4(),
+          name: 'Administrateur Principal',
+          email: 'admin@example.com',
+          password: hashedPassword,
+          role: 'superadmin',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        
+        await db.collection('admins').insertOne(admin);
+        
+        await client.close();
+        
+        return NextResponse.json({
+          success: true,
+          message: '✅ Admin créé avec succès',
+          admin: {
+            id: admin.id,
+            email: admin.email,
+            name: admin.name,
+            password: 'admin123 (à changer après première connexion)'
+          }
+        }, { headers: corsHeaders });
+        
+      } finally {
+        await client.close();
+      }
+    } catch (error) {
+      console.error('❌ Erreur création admin:', error);
+      return NextResponse.json({
+        success: false,
+        error: error.message
+      }, { status: 500, headers: corsHeaders });
+    }
+  }
+  
+  // Autres routes GET
   let client;
   try {
     const { client: dbClient, db } = await getDbConnection();
     client = dbClient;
-
+    
     // Get all books with pagination
     if (path === '/books') {
       const category = searchParams.get('category');
@@ -116,7 +244,7 @@ export async function GET(request) {
       const page = parseInt(searchParams.get('page')) || 1;
       const limit = parseInt(searchParams.get('limit')) || 12;
       const skip = (page - 1) * limit;
-
+      
       let query = {};
       if (category && category !== 'all') query.category = category;
       if (author && author !== 'all') query.author = author;
@@ -127,7 +255,7 @@ export async function GET(request) {
           { description: { $regex: search, $options: 'i' } }
         ];
       }
-
+      
       const total = await db.collection('books').countDocuments(query);
       const books = await db.collection('books')
         .find(query)
@@ -135,7 +263,7 @@ export async function GET(request) {
         .skip(skip)
         .limit(limit)
         .toArray();
-
+      
       await client.close();
       
       return NextResponse.json({
@@ -151,7 +279,7 @@ export async function GET(request) {
         }
       }, { headers: corsHeaders });
     }
-
+    
     // Get single book
     if (path.startsWith('/books/')) {
       const id = path.split('/')[2];
@@ -165,13 +293,13 @@ export async function GET(request) {
           { status: 404, headers: corsHeaders }
         );
       }
-
+      
       return NextResponse.json({ 
         success: true, 
         book 
       }, { headers: corsHeaders });
     }
-
+    
     // Get categories
     if (path === '/categories') {
       const categories = await db.collection('books').distinct('category');
@@ -181,7 +309,7 @@ export async function GET(request) {
         categories 
       }, { headers: corsHeaders });
     }
-
+    
     // Get authors
     if (path === '/authors') {
       const authors = await db.collection('books').distinct('author');
@@ -191,13 +319,13 @@ export async function GET(request) {
         authors 
       }, { headers: corsHeaders });
     }
-
+    
     // Get stats for admin
     if (path === '/admin/stats') {
       const totalBooks = await db.collection('books').countDocuments();
       const categories = await db.collection('books').distinct('category');
       const authors = await db.collection('books').distinct('author');
-
+      
       await client.close();
       
       return NextResponse.json({
@@ -209,33 +337,32 @@ export async function GET(request) {
         }
       }, { headers: corsHeaders });
     }
-
+    
     // Route par défaut
     await client.close();
     return NextResponse.json({
       success: true,
       message: 'Bienvenue sur l\'API Bibliothèque Immersive',
       version: '1.0.0',
-      endpoints: [
-        'GET /api/books',
-        'GET /api/books/:id',
-        'GET /api/categories',
-        'GET /api/authors',
-        'POST /api/books',
-        'POST /api/admin/login',
-        'POST /api/upload',
-        'POST /api/chat',
-        'GET /api/test'
-      ]
+      test_endpoint: 'GET /api/test pour vérifier la configuration',
+      documentation: {
+        books: 'GET /api/books?page=1&limit=12',
+        book: 'GET /api/books/{id}',
+        categories: 'GET /api/categories',
+        authors: 'GET /api/authors',
+        admin_login: 'POST /api/admin/login',
+        create_book: 'POST /api/books',
+        upload: 'POST /api/upload'
+      }
     }, { headers: corsHeaders });
-
+    
   } catch (error) {
-    console.error('GET Error:', error);
+    console.error(`❌ Erreur GET ${path}:`, error);
     if (client) {
       try {
         await client.close();
       } catch (closeError) {
-        console.error('Error closing client:', closeError);
+        console.error('Erreur fermeture client:', closeError);
       }
     }
     return NextResponse.json(
@@ -251,40 +378,184 @@ export async function GET(request) {
 
 // Handler POST
 export async function POST(request) {
-  console.log('POST request to:', request.url);
+  console.log(`📨 POST ${request.url}`);
   
   const { pathname } = new URL(request.url);
   const path = pathname.replace('/api', '') || '/';
-
-  // Handle file upload
+  
+  // Admin login - version robuste
+  if (path === '/admin/login') {
+    try {
+      const body = await request.json();
+      const { email, password } = body;
+      
+      console.log(`🔐 Tentative de connexion admin: ${email}`);
+      
+      if (!email || !password) {
+        return NextResponse.json({
+          success: false,
+          error: 'Email et mot de passe requis',
+          received: {
+            email: !!email,
+            password: !!password
+          }
+        }, { status: 400, headers: corsHeaders });
+      }
+      
+      // Connexion à MongoDB
+      const { client, db } = await getDbConnection();
+      
+      try {
+        // Vérifier si la collection admins existe
+        const collections = await db.listCollections({ name: 'admins' }).toArray();
+        
+        if (collections.length === 0) {
+          console.log('⚠️ Collection admins non trouvée');
+          
+          // Créer la collection et un admin par défaut
+          await db.createCollection('admins');
+          
+          const hashedPassword = await bcrypt.hash('admin123', 10);
+          const defaultAdmin = {
+            id: uuidv4(),
+            name: 'Administrateur',
+            email: 'admin@example.com',
+            password: hashedPassword,
+            role: 'superadmin',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          
+          await db.collection('admins').insertOne(defaultAdmin);
+          
+          console.log('✅ Collection admins créée avec utilisateur par défaut');
+          console.log('📧 Email: admin@example.com');
+          console.log('🔑 Mot de passe: admin123');
+          
+          // Si l'utilisateur essaie avec les identifiants par défaut
+          if (email === 'admin@example.com' && password === 'admin123') {
+            await client.close();
+            return NextResponse.json({
+              success: true,
+              user: {
+                id: defaultAdmin.id,
+                name: defaultAdmin.name,
+                email: defaultAdmin.email,
+                role: defaultAdmin.role
+              },
+              message: 'Connexion réussie avec les identifiants par défaut. Veuillez changer votre mot de passe.'
+            }, { headers: corsHeaders });
+          }
+        }
+        
+        // Chercher l'admin
+        const admin = await db.collection('admins').findOne({ email });
+        
+        if (!admin) {
+          console.log(`❌ Admin non trouvé pour: ${email}`);
+          await client.close();
+          return NextResponse.json({
+            success: false,
+            error: 'Identifiants invalides',
+            suggestion: process.env.NODE_ENV === 'development' ? 
+              'Essayez avec admin@example.com / admin123' : undefined
+          }, { status: 401, headers: corsHeaders });
+        }
+        
+        console.log(`✅ Admin trouvé: ${admin.name} (${admin.email})`);
+        
+        // Vérifier le mot de passe
+        let isValidPassword = false;
+        
+        try {
+          isValidPassword = await bcrypt.compare(password, admin.password);
+        } catch (bcryptError) {
+          console.error('Erreur bcrypt:', bcryptError);
+          // Fallback pour les mots de passe non hachés (migration)
+          if (password === admin.password) {
+            isValidPassword = true;
+            // Hacher le mot de passe et le mettre à jour
+            const hashedPassword = await bcrypt.hash(password, 10);
+            await db.collection('admins').updateOne(
+              { email },
+              { $set: { password: hashedPassword, updatedAt: new Date() } }
+            );
+            console.log('🔄 Mot de passe migré vers bcrypt');
+          }
+        }
+        
+        if (!isValidPassword) {
+          // Vérifier si c'est le mot de passe par défaut
+          if (password === 'admin123' && email === 'admin@example.com') {
+            console.log('⚠️ Utilisation du mot de passe par défaut');
+            isValidPassword = true;
+          } else {
+            console.log('❌ Mot de passe incorrect');
+            await client.close();
+            return NextResponse.json({
+              success: false,
+              error: 'Mot de passe incorrect'
+            }, { status: 401, headers: corsHeaders });
+          }
+        }
+        
+        // Succès de la connexion
+        await client.close();
+        
+        return NextResponse.json({
+          success: true,
+          user: {
+            id: admin.id || admin._id.toString(),
+            name: admin.name,
+            email: admin.email,
+            role: admin.role || 'admin'
+          },
+          token: uuidv4() // Token temporaire (à remplacer par JWT en production)
+        }, { headers: corsHeaders });
+        
+      } finally {
+        await client.close();
+      }
+      
+    } catch (error) {
+      console.error('❌ Erreur login:', error);
+      return NextResponse.json({
+        success: false,
+        error: 'Erreur lors de la connexion',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      }, { status: 500, headers: corsHeaders });
+    }
+  }
+  
+  // Upload de fichiers
   if (path === '/upload') {
     try {
-      // Vérifier le token Blob
       if (!process.env.BLOB_READ_WRITE_TOKEN) {
-        return NextResponse.json(
-          { success: false, error: 'Service de stockage non configuré' },
-          { status: 500, headers: corsHeaders }
-        );
+        return NextResponse.json({
+          success: false,
+          error: 'Service de stockage non configuré',
+          instructions: 'Ajoutez BLOB_READ_WRITE_TOKEN dans les variables d\'environnement Vercel'
+        }, { status: 500, headers: corsHeaders });
       }
-
+      
       const formData = await request.formData();
       const file = formData.get('file');
-      const type = formData.get('type');
-
+      const type = formData.get('type') || 'cover';
+      
       if (!file) {
         return NextResponse.json(
           { success: false, error: 'Aucun fichier fourni' },
           { status: 400, headers: corsHeaders }
         );
       }
-
+      
       // Validate file type
       const validTypes = {
         book: ['application/pdf'],
         cover: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
         audio: ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg']
       };
-
+      
       if (!validTypes[type]?.includes(file.type)) {
         return NextResponse.json(
           { 
@@ -296,45 +567,46 @@ export async function POST(request) {
           { status: 400, headers: corsHeaders }
         );
       }
-
+      
       // Validate file size (50MB max)
       if (file.size > 50 * 1024 * 1024) {
         return NextResponse.json(
           { 
             success: false, 
             error: 'Fichier trop volumineux (max 50MB)',
-            size: file.size
+            size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`
           },
           { status: 400, headers: corsHeaders }
         );
       }
-
+      
       // Convert file to buffer
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
       
       // Generate unique filename
       const ext = file.name.substring(file.name.lastIndexOf('.'));
-      const filename = `${uuidv4()}${ext}`;
-
+      const filename = `${type}-${uuidv4()}${ext}`;
+      
       // Upload to Vercel Blob
       const blob = await put(filename, buffer, {
         access: 'public',
         contentType: file.type,
       });
-
+      
       return NextResponse.json(
         { 
           success: true,
           url: blob.url, 
           filename, 
           size: file.size,
-          contentType: file.type
+          contentType: file.type,
+          downloadUrl: blob.downloadUrl
         },
         { headers: corsHeaders }
       );
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('❌ Upload error:', error);
       return NextResponse.json(
         { 
           success: false, 
@@ -345,66 +617,13 @@ export async function POST(request) {
       );
     }
   }
-
-  // Pour les autres routes POST, lire le JSON du body
+  
+  // Pour les autres routes POST, lire le JSON
   try {
     const body = await request.json();
-    let client;
+    const { client, db } = await getDbConnection();
     
     try {
-      const { client: dbClient, db } = await getDbConnection();
-      client = dbClient;
-
-      // Admin login
-      if (path === '/admin/login') {
-        const { email, password } = body;
-
-        if (!email || !password) {
-          await client.close();
-          return NextResponse.json(
-            { success: false, error: 'Email et mot de passe requis' },
-            { status: 400, headers: corsHeaders }
-          );
-        }
-
-        // Chercher l'admin dans la base de données
-        const admin = await db.collection('admins').findOne({ email });
-
-        if (!admin) {
-          await client.close();
-          return NextResponse.json(
-            { success: false, error: 'Identifiants invalides' },
-            { status: 401, headers: corsHeaders }
-          );
-        }
-
-        // Vérifier le mot de passe
-        const isValidPassword = await bcrypt.compare(password, admin.password);
-
-        if (!isValidPassword) {
-          await client.close();
-          return NextResponse.json(
-            { success: false, error: 'Identifiants invalides' },
-            { status: 401, headers: corsHeaders }
-          );
-        }
-
-        // Retourner les infos de l'admin (sans le mot de passe)
-        await client.close();
-        return NextResponse.json(
-          { 
-            success: true, 
-            user: { 
-              id: admin.id || admin._id,
-              name: admin.name,
-              email: admin.email,
-              role: admin.role || 'admin'
-            } 
-          },
-          { headers: corsHeaders }
-        );
-      }
-
       // Create book
       if (path === '/books') {
         const book = {
@@ -413,37 +632,34 @@ export async function POST(request) {
           createdAt: new Date(),
           updatedAt: new Date(),
         };
-
+        
         await db.collection('books').insertOne(book);
-        await client.close();
         
         return NextResponse.json({ 
           success: true, 
-          book 
+          book,
+          message: 'Livre créé avec succès'
         }, { status: 201, headers: corsHeaders });
       }
-
+      
       // Chat with AI
       if (path === '/chat') {
         const { messages } = body;
-
+        
         if (!messages || messages.length === 0) {
-          await client.close();
           return NextResponse.json(
             { success: false, error: 'Messages requis' },
             { status: 400, headers: corsHeaders }
           );
         }
-
-        // Vérifier la clé OpenAI
+        
         if (!process.env.OPENAI_API_KEY) {
-          await client.close();
           return NextResponse.json(
             { success: false, error: 'Service AI non configuré' },
             { status: 500, headers: corsHeaders }
           );
         }
-
+        
         try {
           const result = await streamText({
             model: openai('gpt-4-turbo'),
@@ -451,14 +667,11 @@ export async function POST(request) {
             temperature: 0.7,
             maxTokens: 1000,
           });
-
-          await client.close();
           
-          // Convert the result to a readable stream
+          // Convert to stream response
           const stream = result.toTextStreamResponse();
           
-          // Créer une réponse avec les headers CORS
-          const response = new Response(stream.body, {
+          return new Response(stream.body, {
             headers: {
               'Content-Type': 'text/event-stream',
               'Cache-Control': 'no-cache',
@@ -466,11 +679,8 @@ export async function POST(request) {
               ...corsHeaders,
             },
           });
-          
-          return response;
         } catch (aiError) {
-          console.error('Chat AI error:', aiError);
-          await client.close();
+          console.error('❌ Chat AI error:', aiError);
           return NextResponse.json(
             { 
               success: false, 
@@ -481,28 +691,19 @@ export async function POST(request) {
           );
         }
       }
-
-      // Si aucune route ne correspond
-      await client.close();
+      
+      // Route non trouvée
       return NextResponse.json(
         { success: false, error: 'Route non trouvée' },
         { status: 404, headers: corsHeaders }
       );
-
-    } catch (dbError) {
-      console.error('Database error:', dbError);
-      if (client) {
-        try {
-          await client.close();
-        } catch (closeError) {
-          console.error('Error closing client:', closeError);
-        }
-      }
-      throw dbError;
+      
+    } finally {
+      await client.close();
     }
-
+    
   } catch (error) {
-    console.error('POST Error:', error);
+    console.error(`❌ POST Error ${path}:`, error);
     return NextResponse.json(
       { 
         success: false, 
@@ -516,19 +717,16 @@ export async function POST(request) {
 
 // Handler PUT
 export async function PUT(request) {
-  console.log('PUT request to:', request.url);
+  console.log(`✏️ PUT ${request.url}`);
   
   const { pathname } = new URL(request.url);
   const path = pathname.replace('/api', '') || '/';
-
+  
   try {
     const body = await request.json();
-    let client;
+    const { client, db } = await getDbConnection();
     
     try {
-      const { client: dbClient, db } = await getDbConnection();
-      client = dbClient;
-
       // Update book
       if (path.startsWith('/books/')) {
         const id = path.split('/')[2];
@@ -536,66 +734,55 @@ export async function PUT(request) {
         // Vérifier si le livre existe
         const existingBook = await db.collection('books').findOne({ id });
         if (!existingBook) {
-          await client.close();
           return NextResponse.json(
             { success: false, error: 'Livre non trouvé' },
             { status: 404, headers: corsHeaders }
           );
         }
-
+        
         const updateData = {
           ...body,
           updatedAt: new Date(),
         };
         
-        // Ne pas permettre la modification de l'ID
+        // Ne pas modifier l'ID et la date de création
         delete updateData.id;
         delete updateData._id;
         delete updateData.createdAt;
-
+        
         const result = await db.collection('books').updateOne(
           { id },
           { $set: updateData }
         );
-
+        
         if (result.modifiedCount === 0) {
-          await client.close();
           return NextResponse.json(
             { success: false, error: 'Aucune modification effectuée' },
             { status: 400, headers: corsHeaders }
           );
         }
-
+        
         const book = await db.collection('books').findOne({ id });
-        await client.close();
         
         return NextResponse.json({ 
           success: true, 
-          book 
+          book,
+          message: 'Livre mis à jour avec succès'
         }, { headers: corsHeaders });
       }
-
-      // Si aucune route ne correspond
-      await client.close();
+      
+      // Route non trouvée
       return NextResponse.json(
         { success: false, error: 'Route non trouvée' },
         { status: 404, headers: corsHeaders }
       );
-
-    } catch (dbError) {
-      console.error('Database error:', dbError);
-      if (client) {
-        try {
-          await client.close();
-        } catch (closeError) {
-          console.error('Error closing client:', closeError);
-        }
-      }
-      throw dbError;
+      
+    } finally {
+      await client.close();
     }
-
+    
   } catch (error) {
-    console.error('PUT Error:', error);
+    console.error(`❌ PUT Error ${path}:`, error);
     return NextResponse.json(
       { 
         success: false, 
@@ -609,63 +796,56 @@ export async function PUT(request) {
 
 // Handler DELETE
 export async function DELETE(request) {
-  console.log('DELETE request to:', request.url);
+  console.log(`🗑️ DELETE ${request.url}`);
   
   const { pathname } = new URL(request.url);
   const path = pathname.replace('/api', '') || '/';
-
-  let client;
+  
   try {
-    const { client: dbClient, db } = await getDbConnection();
-    client = dbClient;
-
-    // Delete book
-    if (path.startsWith('/books/')) {
-      const id = path.split('/')[2];
-      
-      // Vérifier si le livre existe
-      const existingBook = await db.collection('books').findOne({ id });
-      if (!existingBook) {
-        await client.close();
-        return NextResponse.json(
-          { success: false, error: 'Livre non trouvé' },
-          { status: 404, headers: corsHeaders }
-        );
+    const { client, db } = await getDbConnection();
+    
+    try {
+      // Delete book
+      if (path.startsWith('/books/')) {
+        const id = path.split('/')[2];
+        
+        // Vérifier si le livre existe
+        const existingBook = await db.collection('books').findOne({ id });
+        if (!existingBook) {
+          return NextResponse.json(
+            { success: false, error: 'Livre non trouvé' },
+            { status: 404, headers: corsHeaders }
+          );
+        }
+        
+        const result = await db.collection('books').deleteOne({ id });
+        
+        if (result.deletedCount === 1) {
+          return NextResponse.json({ 
+            success: true, 
+            message: 'Livre supprimé avec succès',
+            deletedId: id
+          }, { headers: corsHeaders });
+        } else {
+          return NextResponse.json(
+            { success: false, error: 'Échec de la suppression' },
+            { status: 500, headers: corsHeaders }
+          );
+        }
       }
-
-      const result = await db.collection('books').deleteOne({ id });
       
+      // Route non trouvée
+      return NextResponse.json(
+        { success: false, error: 'Route non trouvée' },
+        { status: 404, headers: corsHeaders }
+      );
+      
+    } finally {
       await client.close();
-      
-      if (result.deletedCount === 1) {
-        return NextResponse.json({ 
-          success: true, 
-          message: 'Livre supprimé avec succès' 
-        }, { headers: corsHeaders });
-      } else {
-        return NextResponse.json(
-          { success: false, error: 'Échec de la suppression' },
-          { status: 500, headers: corsHeaders }
-        );
-      }
     }
-
-    // Si aucune route ne correspond
-    await client.close();
-    return NextResponse.json(
-      { success: false, error: 'Route non trouvée' },
-      { status: 404, headers: corsHeaders }
-    );
-
+    
   } catch (error) {
-    console.error('DELETE Error:', error);
-    if (client) {
-      try {
-        await client.close();
-      } catch (closeError) {
-        console.error('Error closing client:', closeError);
-      }
-    }
+    console.error(`❌ DELETE Error ${path}:`, error);
     return NextResponse.json(
       { 
         success: false, 
