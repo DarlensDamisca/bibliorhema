@@ -72,7 +72,7 @@ export default function AdminLoginPage() {
                 <label className="text-sm font-medium">Email</label>
                 <Input
                   type="email"
-                  placeholder="admin@library.com"
+                  placeholder="admin@Rhêma.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -107,10 +107,7 @@ export default function AdminLoginPage() {
               </Button>
 
               <div className="text-center text-sm text-muted-foreground">
-                <p>Identifiants de test :</p>
-                <p className="font-mono text-xs mt-1">
-                  admin@library.com / admin123
-                </p>
+               
               </div>
             </form>
           </CardContent>
