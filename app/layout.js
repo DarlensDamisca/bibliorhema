@@ -5,8 +5,8 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'Bibliothèque Immersive | Lecture Premium avec Spotlight',
-  description: 'Découvrez une expérience de lecture immersive avec effet spotlight dynamique',
+  title: 'Bibliothèque Rhêma | Lecture Premium',
+  description: 'Découvrez une expérience de lecture avec Rhêma',
 };
 
 export default function RootLayout({ children }) {
