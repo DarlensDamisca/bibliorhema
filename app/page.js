@@ -113,7 +113,7 @@ export default function Home() {
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                    Bibliothèque Immersive
+                    Bibliothèque Rhêma
                   </h1>
                   <p className="text-xs text-muted-foreground">Découvrez une nouvelle façon de lire</p>
                 </div>
@@ -140,7 +140,7 @@ export default function Home() {
               Explorez Notre Collection
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Une expérience de lecture premium avec effet spotlight immersif
+              Une expérience de lecture sans pareil
             </p>
           </motion.div>
 
@@ -353,7 +353,7 @@ export default function Home() {
         <footer className="border-t border-border/50 mt-20 py-8 bg-background/50 backdrop-blur-sm">
           <div className="container mx-auto px-4 text-center">
             <p className="text-sm text-muted-foreground">
-              © 2025 Bibliothèque Immersive • Conçu avec ❤️ et effet Spotlight
+              © 2025 Bibliothèque Rhêma •
             </p>
           </div>
         </footer>
