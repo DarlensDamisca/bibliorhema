@@ -675,7 +675,7 @@ export default function BookPage({ params }) {
                         <CardContent className="p-4 h-full flex flex-col min-h-0">
                           <div className="flex items-center gap-2 mb-4 pb-3 border-b flex-shrink-0">
                             <MessageSquare className="w-5 h-5 text-primary" />
-                            <span className="font-semibold">Assistant Littéraire</span>
+                            <span className="font-semibold">Assistant AI</span>
                           </div>
 
                           <div className="flex-1 overflow-hidden min-h-0">
@@ -683,7 +683,7 @@ export default function BookPage({ params }) {
                               {messages.length === 0 ? (
                                 <div className="text-center py-8">
                                   <p className="text-sm text-muted-foreground mb-4">
-                                    Posez-moi des questions sur le livre !
+                                    Posez des questions sur le livre !
                                   </p>
                                   <div className="space-y-2 text-xs text-muted-foreground">
                                     <p>💡 "Résume ce chapitre"</p>
