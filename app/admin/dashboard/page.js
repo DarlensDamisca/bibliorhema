@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { BookOpen, Users, Layers, Plus, Edit, Trash2, ArrowLeft, LogOut, Upload, Loader2 } from 'lucide-react';
+import { BookOpen, Users, Layers, Plus, Edit, Trash2, ArrowLeft, LogOut, Upload, Loader2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,7 @@ export default function AdminDashboard() {
   const router = useRouter();
   const [stats, setStats] = useState({ totalBooks: 0, totalCategories: 0, totalAuthors: 0 });
   const [books, setBooks] = useState([]);
+  const [filteredBooks, setFilteredBooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
   const [editingBook, setEditingBook] = useState(null);
@@ -37,6 +38,15 @@ export default function AdminDashboard() {
     pdfUrl: '',
     audioUrl: ''
   });
+  
+  // États pour la pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [booksPerPage] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+  
+  // État pour la recherche
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchCategory, setSearchCategory] = useState('');
 
   useEffect(() => {
     const admin = localStorage.getItem('admin');
@@ -46,6 +56,22 @@ export default function AdminDashboard() {
     }
     fetchData();
   }, []);
+
+  useEffect(() => {
+    // Filtrer les livres lorsque la recherche change
+    filterBooks();
+  }, [searchQuery, searchCategory, books]);
+
+  useEffect(() => {
+    // Mettre à jour le nombre total de pages lorsque les livres filtrés changent
+    const newTotalPages = Math.ceil(filteredBooks.length / booksPerPage);
+    setTotalPages(newTotalPages);
+    
+    // Si la page actuelle dépasse le nombre total de pages, revenir à la première page
+    if (currentPage > newTotalPages && newTotalPages > 0) {
+      setCurrentPage(1);
+    }
+  }, [filteredBooks, booksPerPage]);
 
   const fetchData = async () => {
     try {
@@ -59,11 +85,35 @@ export default function AdminDashboard() {
 
       setStats(statsData.stats || { totalBooks: 0, totalCategories: 0, totalAuthors: 0 });
       setBooks(booksData.books || []);
+      setFilteredBooks(booksData.books || []);
     } catch (error) {
       console.error('Erreur:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const filterBooks = () => {
+    let filtered = [...books];
+
+    // Filtrer par recherche textuelle
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(book =>
+        book.title.toLowerCase().includes(query) ||
+        book.author.toLowerCase().includes(query) ||
+        book.description?.toLowerCase().includes(query)
+      );
+    }
+
+    // Filtrer par catégorie
+    if (searchCategory) {
+      filtered = filtered.filter(book =>
+        book.category.toLowerCase() === searchCategory.toLowerCase()
+      );
+    }
+
+    setFilteredBooks(filtered);
   };
 
   const handleLogout = () => {
@@ -173,6 +223,36 @@ export default function AdminDashboard() {
     }
   };
 
+  // Calculer les livres à afficher pour la page actuelle
+  const indexOfLastBook = currentPage * booksPerPage;
+  const indexOfFirstBook = indexOfLastBook - booksPerPage;
+  const currentBooks = filteredBooks.slice(indexOfFirstBook, indexOfLastBook);
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handlePageClick = (pageNumber) => {
+    setCurrentPage(pageNumber);
+  };
+
+  // Obtenir toutes les catégories uniques pour le filtre
+  const allCategories = [...new Set(books.map(book => book.category))].sort();
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setSearchCategory('');
+    setCurrentPage(1);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -270,42 +350,150 @@ export default function AdminDashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {books.map((book) => (
-                  <motion.div
-                    key={book.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex items-center gap-4 p-4 border border-border/50 rounded-lg hover:border-primary/50 transition-all"
-                  >
-                    <div className="w-16 h-20 bg-gradient-to-br from-primary/20 to-secondary/20 rounded flex-shrink-0 overflow-hidden">
-                      {book.coverImage ? (
-                        <img src={book.coverImage} alt={book.title} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <BookOpen className="w-6 h-6 text-muted-foreground" />
-                        </div>
-                      )}
+              {/* Barre de recherche et filtres */}
+              <div className="mb-6 space-y-4">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                      <Input
+                        placeholder="Rechercher par titre, auteur ou description..."
+                        className="pl-10"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                      />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold truncate">{book.title}</h3>
-                      <p className="text-sm text-muted-foreground">Par {book.author}</p>
-                      <div className="flex gap-2 mt-1">
-                        <Badge variant="secondary" className="text-xs">{book.category}</Badge>
-                        {book.year && <Badge variant="outline" className="text-xs">{book.year}</Badge>}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => handleOpenDialog(book)}>
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button variant="destructive" size="sm" onClick={() => handleDelete(book.id)}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </motion.div>
-                ))}
+                  </div>
+                  <div className="w-full md:w-64">
+                    <select
+                      className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                      value={searchCategory}
+                      onChange={(e) => setSearchCategory(e.target.value)}
+                    >
+                      <option value="">Toutes les catégories</option>
+                      {allCategories.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {(searchQuery || searchCategory) && (
+                    <Button variant="outline" onClick={resetFilters}>
+                      Réinitialiser
+                    </Button>
+                  )}
+                </div>
+                
+                <div className="text-sm text-muted-foreground">
+                  {filteredBooks.length} livre{filteredBooks.length !== 1 ? 's' : ''} trouvé{filteredBooks.length !== 1 ? 's' : ''}
+                </div>
               </div>
+
+              {/* Liste des livres */}
+              <div className="space-y-4">
+                {currentBooks.length > 0 ? (
+                  currentBooks.map((book) => (
+                    <motion.div
+                      key={book.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="flex items-center gap-4 p-4 border border-border/50 rounded-lg hover:border-primary/50 transition-all"
+                    >
+                      <div className="w-16 h-20 bg-gradient-to-br from-primary/20 to-secondary/20 rounded flex-shrink-0 overflow-hidden">
+                        {book.coverImage ? (
+                          <img src={book.coverImage} alt={book.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <BookOpen className="w-6 h-6 text-muted-foreground" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold truncate">{book.title}</h3>
+                        <p className="text-sm text-muted-foreground">Par {book.author}</p>
+                        <div className="flex gap-2 mt-1">
+                          <Badge variant="secondary" className="text-xs">{book.category}</Badge>
+                          {book.year && <Badge variant="outline" className="text-xs">{book.year}</Badge>}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => handleOpenDialog(book)}>
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={() => handleDelete(book.id)}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </motion.div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    {books.length === 0 ? 'Aucun livre dans la bibliothèque' : 'Aucun livre correspondant à votre recherche'}
+                  </div>
+                )}
+              </div>
+
+              {/* Pagination */}
+              {filteredBooks.length > booksPerPage && (
+                <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-sm text-muted-foreground">
+                    Affichage {indexOfFirstBook + 1}-{Math.min(indexOfLastBook, filteredBooks.length)} sur {filteredBooks.length} livre{filteredBooks.length !== 1 ? 's' : ''}
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handlePrevPage}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      Précédent
+                    </Button>
+                    
+                    <div className="flex gap-1">
+                      {[...Array(totalPages)].map((_, index) => {
+                        const pageNumber = index + 1;
+                        // Afficher seulement un certain nombre de pages autour de la page actuelle
+                        if (
+                          pageNumber === 1 ||
+                          pageNumber === totalPages ||
+                          (pageNumber >= currentPage - 1 && pageNumber <= currentPage + 1)
+                        ) {
+                          return (
+                            <Button
+                              key={pageNumber}
+                              variant={currentPage === pageNumber ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handlePageClick(pageNumber)}
+                              className="w-9 h-9 p-0"
+                            >
+                              {pageNumber}
+                            </Button>
+                          );
+                        } else if (
+                          pageNumber === currentPage - 2 ||
+                          pageNumber === currentPage + 2
+                        ) {
+                          return <span key={pageNumber} className="px-2">...</span>;
+                        }
+                        return null;
+                      })}
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleNextPage}
+                      disabled={currentPage === totalPages}
+                    >
+                      Suivant
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </main>
