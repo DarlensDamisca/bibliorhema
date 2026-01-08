@@ -353,7 +353,7 @@ export default function Home() {
         <footer className="border-t border-border/50 mt-20 py-8 bg-background/50 backdrop-blur-sm">
           <div className="container mx-auto px-4 text-center">
             <p className="text-sm text-muted-foreground">
-              © 2025 Bibliothèque Rhêma •
+              © {new Date().getFullYear()} Bibliothèque Rhêma •
             </p>
           </div>
         </footer>
