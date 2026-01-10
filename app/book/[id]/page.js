@@ -858,7 +858,7 @@ export default function BookPage({ params }) {
                         {relatedBook.coverUrl || relatedBook.cover ? (
                           <div className="relative w-full h-full">
                             <img
-                              src={relatedBook.coverUrl || relatedBook.cover}
+                              src={relatedBook.coverImage}
                               alt={relatedBook.title}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               onError={(e) => {
