@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, BookOpen, MessageSquare, Loader2, Send, Menu, X, Maximize2, Minimize2, Search, ZoomIn, ZoomOut, Printer, Download, Sun, Moon, ChevronLeft, ChevronRight, Grid } from 'lucide-react';
+import { ArrowLeft, BookOpen, MessageSquare, Loader2, Send, Menu, X, Maximize2, Minimize2, Search, ZoomIn, ZoomOut, Download, Sun, Moon, ChevronLeft, ChevronRight, Grid, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -32,6 +32,8 @@ import '@react-pdf-viewer/thumbnail/lib/styles/index.css';
 export default function BookPage({ params }) {
   const [book, setBook] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [relatedBooks, setRelatedBooks] = useState([]);
+  const [loadingRelated, setLoadingRelated] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoadingChat, setIsLoadingChat] = useState(false);
@@ -46,25 +48,22 @@ export default function BookPage({ params }) {
   const [showSearch, setShowSearch] = useState(false);
   const [showThumbnails, setShowThumbnails] = useState(false);
   const [viewerHeight, setViewerHeight] = useState('calc(100vh - 8rem)');
+  const [currentSlide, setCurrentSlide] = useState(0);
   
   // Références
   const viewerRef = useRef(null);
   const searchInputRef = useRef(null);
   const pdfContainerRef = useRef(null);
   const mainContainerRef = useRef(null);
+  const relatedBooksRef = useRef(null);
   
   // Plugins React PDF Viewer
   const thumbnailPluginInstance = thumbnailPlugin();
   const pageNavigationPluginInstance = pageNavigationPlugin();
-  
-  // Plugin de recherche avec keyword géré par état
   const searchPluginInstance = searchPlugin({
     keyword: searchKeyword,
   });
-  
   const zoomPluginInstance = zoomPlugin();
-  
-  // Plugin de layout par défaut - DÉSACTIVÉ pour mieux contrôler
   const defaultLayoutPluginInstance = defaultLayoutPlugin({
     sidebarTabs: () => [],
     toolbarPlugin: {
@@ -78,7 +77,6 @@ export default function BookPage({ params }) {
     },
   });
 
-  // Combinaison de tous les plugins
   const plugins = [
     defaultLayoutPluginInstance,
     pageNavigationPluginInstance,
@@ -90,10 +88,9 @@ export default function BookPage({ params }) {
   useEffect(() => {
     fetchBook();
     
-    // Calculer la hauteur disponible
     const calculateHeight = () => {
-      const headerHeight = 64; // Environ 4rem
-      const mainPadding = 24; // py-6
+      const headerHeight = 64;
+      const mainPadding = 24;
       const availableHeight = window.innerHeight - headerHeight - mainPadding;
       setViewerHeight(`${availableHeight}px`);
     };
@@ -105,7 +102,12 @@ export default function BookPage({ params }) {
   }, [params.id]);
 
   useEffect(() => {
-    // Quand la sidebar s'ouvre/ferme, ajuster la hauteur
+    if (book && book.category) {
+      fetchRelatedBooks();
+    }
+  }, [book]);
+
+  useEffect(() => {
     const calculateHeight = () => {
       const headerHeight = 64;
       const mainPadding = 24;
@@ -127,6 +129,27 @@ export default function BookPage({ params }) {
       console.error('Erreur:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRelatedBooks = async () => {
+    if (!book?.category) return;
+    
+    setLoadingRelated(true);
+    try {
+      const params = new URLSearchParams({
+        category: book.category,
+        exclude: book.id,
+        limit: '10'
+      });
+
+      const res = await fetch(`/api/books?${params.toString()}`);
+      const data = await res.json();
+      setRelatedBooks(data.books || []);
+    } catch (error) {
+      console.error('Erreur lors du chargement des livres similaires:', error);
+    } finally {
+      setLoadingRelated(false);
     }
   };
 
@@ -197,7 +220,6 @@ export default function BookPage({ params }) {
           }
         }
 
-        // Mettre à jour le message assistant en temps réel
         setMessages([...newMessages, { role: 'assistant', content: assistantMessage }]);
       }
     } catch (error) {
@@ -211,7 +233,6 @@ export default function BookPage({ params }) {
     }
   };
 
-  // Handlers pour les événements PDF
   const handlePageChange = (e) => {
     setCurrentPage(e.currentPage + 1);
   };
@@ -224,10 +245,8 @@ export default function BookPage({ params }) {
     setScale(newScale);
   };
 
-  // Fonctions de recherche
   const handleSearch = () => {
     if (searchKeyword.trim()) {
-      // La recherche se déclenche automatiquement car searchKeyword est passé au plugin
       setShowSearch(false);
     }
   };
@@ -242,12 +261,27 @@ export default function BookPage({ params }) {
     }
   };
 
-  // Effet pour réinitialiser la recherche quand on ferme l'interface
   useEffect(() => {
     if (!showSearch) {
       setSearchKeyword('');
     }
   }, [showSearch]);
+
+  const nextSlide = () => {
+    if (relatedBooks.length <= 6) return;
+    const maxSlides = Math.ceil(relatedBooks.length / 6) - 1;
+    setCurrentSlide(prev => prev < maxSlides ? prev + 1 : prev);
+  };
+
+  const prevSlide = () => {
+    setCurrentSlide(prev => prev > 0 ? prev - 1 : 0);
+  };
+
+  const getCurrentSlideBooks = () => {
+    const startIndex = currentSlide * 6;
+    const endIndex = startIndex + 6;
+    return relatedBooks.slice(startIndex, endIndex);
+  };
 
   if (loading) {
     return (
@@ -332,21 +366,20 @@ export default function BookPage({ params }) {
         </div>
       </header>
 
-      {/* Main Content - NO SCROLL HERE */}
+      {/* Main Content */}
       <div ref={mainContainerRef} className="container mx-auto px-0 lg:px-4 py-4 lg:py-6">
         <div className={`grid ${isFullscreen ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-3'} gap-4 lg:gap-6`}>
           
-          {/* PDF Viewer - HAUTEUR FIXE avec scroll interne */}
+          {/* PDF Viewer */}
           <div className={`${isFullscreen ? 'col-span-1' : 'lg:col-span-2'} order-1`}>
             <motion.div layout className="relative">
               <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-lg">
                 <CardContent className="p-0">
                   {book.pdfUrl ? (
                     <div className="flex flex-col">
-                      {/* Barre de contrôles FIXE */}
+                      {/* Barre de contrôles */}
                       <div className="p-3 border-b bg-background/80 backdrop-blur-sm">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                          {/* Info du livre et navigation */}
                           <div className="flex items-center gap-4">
                             <div className="hidden md:block">
                               <div className="text-sm font-semibold truncate max-w-[200px]">
@@ -400,7 +433,6 @@ export default function BookPage({ params }) {
                             </div>
                           </div>
                           
-                          {/* Barre de recherche et outils */}
                           <div className="flex items-center gap-2">
                             {/* Recherche */}
                             <div className="relative">
@@ -450,7 +482,6 @@ export default function BookPage({ params }) {
                               )}
                             </div>
                             
-                            {/* Miniatures */}
                             <Button
                               size="sm"
                               variant="outline"
@@ -461,7 +492,6 @@ export default function BookPage({ params }) {
                               <Grid className="w-4 h-4" />
                             </Button>
                             
-                            {/* Zoom */}
                             <div className="flex items-center gap-1">
                               <Button
                                 size="sm"
@@ -488,7 +518,6 @@ export default function BookPage({ params }) {
                               </Button>
                             </div>
                             
-                            {/* Thème */}
                             <Button
                               size="sm"
                               variant="outline"
@@ -499,7 +528,6 @@ export default function BookPage({ params }) {
                               {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                             </Button>
                             
-                            {/* Télécharger */}
                             <Button
                               size="sm"
                               variant="outline"
@@ -517,7 +545,6 @@ export default function BookPage({ params }) {
                           </div>
                         </div>
                         
-                        {/* Barre de progression */}
                         <div className="mt-3">
                           <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                             <motion.div
@@ -530,9 +557,8 @@ export default function BookPage({ params }) {
                         </div>
                       </div>
 
-                      {/* CONTENEUR PRINCIPAL DU PDF AVEC HAUTEUR FIXE */}
+                      {/* Conteneur PDF */}
                       <div className="flex" style={{ height: viewerHeight }}>
-                        {/* Miniatures sidebar */}
                         <AnimatePresence>
                           {showThumbnails && (
                             <motion.div
@@ -578,7 +604,6 @@ export default function BookPage({ params }) {
                           )}
                         </AnimatePresence>
                         
-                        {/* Viewer principal */}
                         <div 
                           ref={pdfContainerRef}
                           className="relative bg-muted/30 flex-1 overflow-hidden"
@@ -620,7 +645,6 @@ export default function BookPage({ params }) {
                         </div>
                       </div>
 
-                      {/* Info raccourcis (FIXE en bas) */}
                       <div className="p-2 border-t bg-background/50">
                         <p className="text-xs text-muted-foreground text-center">
                           💡 <kbd className="px-2 py-1 bg-background rounded border">Ctrl+F</kbd> Recherche native • 
@@ -741,20 +765,146 @@ export default function BookPage({ params }) {
                         </CardContent>
                       </Card>
 
-                       {book.audioUrl && (
+                      {book.audioUrl && (
                         <div className="h-full mt-4 flex-1 flex flex-col min-h-0">
                           <AudioPlayer audioUrl={book.audioUrl} title={book.title} />
                         </div>
                       )}
                     </TabsContent>
-
-                   
                   </Tabs>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
+
+        {/* SECTION LIVRES DE LA MÊME CATÉGORIE */}
+        {!isFullscreen && relatedBooks.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            ref={relatedBooksRef}
+            className="mt-12"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                  Livres de la même catégorie
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Découvrez d'autres livres dans "{book?.category}"
+                </p>
+              </div>
+              
+              <Link href={`/?category=${encodeURIComponent(book?.category || '')}`}>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <ExternalLink className="w-4 h-4" />
+                  Voir plus
+                </Button>
+              </Link>
+            </div>
+
+            {loadingRelated ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              </div>
+            ) : (
+              <div className="relative">
+                {/* Navigation buttons */}
+                {relatedBooks.length > 6 && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 bg-background/80 backdrop-blur-sm"
+                      onClick={prevSlide}
+                      disabled={currentSlide === 0}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 bg-background/80 backdrop-blur-sm"
+                      onClick={nextSlide}
+                      disabled={currentSlide >= Math.ceil(relatedBooks.length / 6) - 1}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </>
+                )}
+
+                {/* Books grid */}
+                <div className="overflow-hidden">
+                  <motion.div
+                    key={currentSlide}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
+                  >
+                    {getCurrentSlideBooks().map((relatedBook) => (
+                      <Link 
+                        key={relatedBook.id} 
+                        href={`/book/${relatedBook.id}`}
+                        className="group"
+                      >
+                        <Card className="h-full border-border/50 bg-card/50 backdrop-blur-sm hover:bg-card/80 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] overflow-hidden">
+                          <CardContent className="p-4 h-full flex flex-col">
+                            <div className="flex-1">
+                              <div className="aspect-[3/4] bg-gradient-to-br from-primary/10 to-secondary/10 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                                {relatedBook.coverUrl ? (
+                                  <img
+                                    src={relatedBook.coverUrl}
+                                    alt={relatedBook.title}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  />
+                                ) : (
+                                  <BookOpen className="w-12 h-12 text-primary/40" />
+                                )}
+                              </div>
+                              
+                              <h3 className="font-semibold text-sm line-clamp-2 mb-1 group-hover:text-primary transition-colors">
+                                {relatedBook.title}
+                              </h3>
+                              <p className="text-xs text-muted-foreground line-clamp-1 mb-2">
+                                {relatedBook.author}
+                              </p>
+                            </div>
+                            
+                            <Badge variant="secondary" className="text-xs w-fit">
+                              {relatedBook.category}
+                            </Badge>
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    ))}
+                  </motion.div>
+                </div>
+
+                {/* Slide indicators */}
+                {relatedBooks.length > 6 && (
+                  <div className="flex justify-center gap-2 mt-6">
+                    {Array.from({ length: Math.ceil(relatedBooks.length / 6) }).map((_, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setCurrentSlide(index)}
+                        className={`w-2 h-2 rounded-full transition-all ${
+                          index === currentSlide 
+                            ? 'bg-primary w-6' 
+                            : 'bg-muted-foreground/30 hover:bg-muted-foreground/50'
+                        }`}
+                        aria-label={`Aller au slide ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </motion.div>
+        )}
       </div>
     </div>
   );
