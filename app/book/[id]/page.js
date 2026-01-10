@@ -778,133 +778,146 @@ export default function BookPage({ params }) {
           </AnimatePresence>
         </div>
 
-        {/* SECTION LIVRES DE LA MÊME CATÉGORIE */}
-        {!isFullscreen && relatedBooks.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            ref={relatedBooksRef}
-            className="mt-12"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                  Livres de la même catégorie
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  Découvrez d'autres livres dans "{book?.category}"
-                </p>
-              </div>
-              
-              <Link href={`/?category=${encodeURIComponent(book?.category || '')}`}>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <ExternalLink className="w-4 h-4" />
-                  Voir plus
-                </Button>
-              </Link>
-            </div>
+       {/* SECTION LIVRES DE LA MÊME CATÉGORIE */}
+{!isFullscreen && relatedBooks.length > 0 && (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.5, delay: 0.3 }}
+    ref={relatedBooksRef}
+    className="mt-12"
+  >
+    <div className="flex items-center justify-between mb-6">
+      <div>
+        <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+          Livres de la même catégorie
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Découvrez d'autres livres dans "{book?.category}"
+        </p>
+      </div>
+      
+      <Link href={`/?category=${encodeURIComponent(book?.category || '')}`}>
+        <Button variant="outline" size="sm" className="gap-2">
+          <ExternalLink className="w-4 h-4" />
+          Voir plus
+        </Button>
+      </Link>
+    </div>
 
-            {loadingRelated ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-              </div>
-            ) : (
-              <div className="relative">
-                {/* Navigation buttons */}
-                {relatedBooks.length > 6 && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 bg-background/80 backdrop-blur-sm"
-                      onClick={prevSlide}
-                      disabled={currentSlide === 0}
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 bg-background/80 backdrop-blur-sm"
-                      onClick={nextSlide}
-                      disabled={currentSlide >= Math.ceil(relatedBooks.length / 6) - 1}
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </>
-                )}
-
-                {/* Books grid */}
-                <div className="overflow-hidden">
-                  <motion.div
-                    key={currentSlide}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
-                  >
-                    {getCurrentSlideBooks().map((relatedBook) => (
-                      <Link 
-                        key={relatedBook.id} 
-                        href={`/book/${relatedBook.id}`}
-                        className="group"
-                      >
-                        <Card className="h-full border-border/50 bg-card/50 backdrop-blur-sm hover:bg-card/80 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] overflow-hidden">
-                          <CardContent className="p-4 h-full flex flex-col">
-                            <div className="flex-1">
-                              <div className="aspect-[3/4] bg-gradient-to-br from-primary/10 to-secondary/10 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-                                {relatedBook.coverUrl ? (
-                                  <img
-                                    src={relatedBook.coverUrl}
-                                    alt={relatedBook.title}
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                  />
-                                ) : (
-                                  <BookOpen className="w-12 h-12 text-primary/40" />
-                                )}
-                              </div>
-                              
-                              <h3 className="font-semibold text-sm line-clamp-2 mb-1 group-hover:text-primary transition-colors">
-                                {relatedBook.title}
-                              </h3>
-                              <p className="text-xs text-muted-foreground line-clamp-1 mb-2">
-                                {relatedBook.author}
-                              </p>
-                            </div>
-                            
-                            <Badge variant="secondary" className="text-xs w-fit">
-                              {relatedBook.category}
-                            </Badge>
-                          </CardContent>
-                        </Card>
-                      </Link>
-                    ))}
-                  </motion.div>
-                </div>
-
-                {/* Slide indicators */}
-                {relatedBooks.length > 6 && (
-                  <div className="flex justify-center gap-2 mt-6">
-                    {Array.from({ length: Math.ceil(relatedBooks.length / 6) }).map((_, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setCurrentSlide(index)}
-                        className={`w-2 h-2 rounded-full transition-all ${
-                          index === currentSlide 
-                            ? 'bg-primary w-6' 
-                            : 'bg-muted-foreground/30 hover:bg-muted-foreground/50'
-                        }`}
-                        aria-label={`Aller au slide ${index + 1}`}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </motion.div>
+    {loadingRelated ? (
+      <div className="flex justify-center py-8">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    ) : (
+      <div className="relative">
+        {/* Navigation buttons */}
+        {relatedBooks.length > 6 && (
+          <>
+            <Button
+              variant="outline"
+              size="icon"
+              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 bg-background/80 backdrop-blur-sm"
+              onClick={prevSlide}
+              disabled={currentSlide === 0}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="icon"
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 bg-background/80 backdrop-blur-sm"
+              onClick={nextSlide}
+              disabled={currentSlide >= Math.ceil(relatedBooks.length / 6) - 1}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </>
         )}
+
+        {/* Books grid */}
+        <div className="overflow-hidden">
+          <motion.div
+            key={currentSlide}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
+          >
+            {getCurrentSlideBooks().map((relatedBook) => (
+              <Link 
+                key={relatedBook.id || relatedBook._id} 
+                href={`/book/${relatedBook.id || relatedBook._id}`}
+                className="group"
+              >
+                <Card className="h-full border-border/50 bg-card/50 backdrop-blur-sm hover:bg-card/80 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] overflow-hidden">
+                  <CardContent className="p-4 h-full flex flex-col">
+                    <div className="flex-1">
+                      <div className="aspect-[3/4] bg-gradient-to-br from-primary/10 to-secondary/10 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                        {relatedBook.coverUrl || relatedBook.cover ? (
+                          <div className="relative w-full h-full">
+                            <img
+                              src={relatedBook.coverUrl || relatedBook.cover}
+                              alt={relatedBook.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              onError={(e) => {
+                                // Si l'image ne se charge pas, afficher une icône
+                                e.target.style.display = 'none';
+                                e.target.parentElement.innerHTML = `
+                                  <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-secondary/20">
+                                    <BookOpen class="w-12 h-12 text-primary/60" />
+                                  </div>
+                                `;
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-secondary/20">
+                            <BookOpen className="w-12 h-12 text-primary/60" />
+                          </div>
+                        )}
+                      </div>
+                      
+                      <h3 className="font-semibold text-sm line-clamp-2 mb-1 group-hover:text-primary transition-colors">
+                        {relatedBook.title}
+                      </h3>
+                      <p className="text-xs text-muted-foreground line-clamp-1 mb-2">
+                        {relatedBook.author}
+                      </p>
+                    </div>
+                    
+                    <Badge variant="secondary" className="text-xs w-fit">
+                      {relatedBook.category}
+                    </Badge>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </motion.div>
+        </div>
+
+        {/* Slide indicators */}
+        {relatedBooks.length > 6 && (
+          <div className="flex justify-center gap-2 mt-6">
+            {Array.from({ length: Math.ceil(relatedBooks.length / 6) }).map((_, index) => (
+              <button
+                key={index}
+                onClick={() => setCurrentSlide(index)}
+                className={`w-2 h-2 rounded-full transition-all ${
+                  index === currentSlide 
+                    ? 'bg-primary w-6' 
+                    : 'bg-muted-foreground/30 hover:bg-muted-foreground/50'
+                }`}
+                aria-label={`Aller au slide ${index + 1}`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    )}
+  </motion.div>
+)}
       </div>
     </div>
   );
