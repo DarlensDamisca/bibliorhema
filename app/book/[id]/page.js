@@ -855,7 +855,7 @@ export default function BookPage({ params }) {
                   <CardContent className="p-4 h-full flex flex-col">
                     <div className="flex-1">
                       <div className="aspect-[3/4] bg-gradient-to-br from-primary/10 to-secondary/10 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-                        {relatedBook.coverUrl || relatedBook.cover ? (
+                        {relatedBook.coverImage ? (
                           <div className="relative w-full h-full">
                             <img
                               src={relatedBook.coverImage}
