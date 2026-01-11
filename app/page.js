@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Filter, BookOpen, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Filter, BookOpen, Sparkles, ChevronLeft, ChevronRight, X, Volume2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -29,15 +29,34 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedAuthor, setSelectedAuthor] = useState('all');
+  
+  // Nouveaux états pour la section publicitaire
+  const [featuredBooks, setFeaturedBooks] = useState([]);
+  const [currentFeaturedIndex, setCurrentFeaturedIndex] = useState(0);
+  const [showFeaturedSection, setShowFeaturedSection] = useState(true);
 
   useEffect(() => {
     fetchCategories();
     fetchAuthors();
+    fetchFeaturedBooks();
   }, []);
 
   useEffect(() => {
     fetchBooks();
   }, [pagination.page, searchQuery, selectedCategory, selectedAuthor]);
+
+  // Timer pour changer le livre mis en avant automatiquement
+  useEffect(() => {
+    if (featuredBooks.length > 1 && showFeaturedSection) {
+      const interval = setInterval(() => {
+        setCurrentFeaturedIndex((prevIndex) => 
+          prevIndex === featuredBooks.length - 1 ? 0 : prevIndex + 1
+        );
+      }, 8000); // Change toutes les 8 secondes
+
+      return () => clearInterval(interval);
+    }
+  }, [featuredBooks, showFeaturedSection]);
 
   const fetchBooks = async () => {
     setLoading(true);
@@ -60,6 +79,17 @@ export default function Home() {
       console.error('Erreur lors du chargement des livres:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchFeaturedBooks = async () => {
+    try {
+      // On récupère des livres au hasard pour la section publicitaire
+      const res = await fetch('/api/books?limit=5&random=true');
+      const data = await res.json();
+      setFeaturedBooks(data.books || []);
+    } catch (error) {
+      console.error('Erreur lors du chargement des livres mis en avant:', error);
     }
   };
 
@@ -95,6 +125,18 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const nextFeaturedBook = () => {
+    setCurrentFeaturedIndex((prevIndex) => 
+      prevIndex === featuredBooks.length - 1 ? 0 : prevIndex + 1
+    );
+  };
+
+  const prevFeaturedBook = () => {
+    setCurrentFeaturedIndex((prevIndex) => 
+      prevIndex === 0 ? featuredBooks.length - 1 : prevIndex - 1
+    );
+  };
+
   return (
     <div className="min-h-screen relative">
       {/* Spotlight Background */}
@@ -126,6 +168,116 @@ export default function Home() {
             </div>
           </div>
         </header>
+
+        {/* Section Publicitaire - Livres en vedette */}
+        {showFeaturedSection && featuredBooks.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative bg-gradient-to-r from-primary/10 via-primary/5 to-secondary/10 border-y border-border/50"
+          >
+            <div className="container mx-auto px-4 py-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+                    <div className="w-2 h-2 rounded-full bg-primary animate-pulse delay-150"></div>
+                    <div className="w-2 h-2 rounded-full bg-primary animate-pulse delay-300"></div>
+                  </div>
+                  <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded-full">
+                    DÉCOUVERTE DU MOMENT
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowFeaturedSection(false)}
+                  className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={prevFeaturedBook}
+                  className="h-8 w-8 p-0"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                
+                <div className="flex-1 px-4">
+                  <motion.div
+                    key={currentFeaturedIndex}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="flex flex-col md:flex-row items-center justify-center gap-4"
+                  >
+                    <div className="relative">
+                      <div className="w-16 h-20 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center shadow-md">
+                        <BookOpen className="w-8 h-8 text-primary/70" />
+                      </div>
+                      {featuredBooks[currentFeaturedIndex]?.type === 'audio' && (
+                        <div className="absolute -top-1 -right-1 bg-blue-500 text-white rounded-full p-1">
+                          <Volume2 className="w-3 h-3" />
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="text-center md:text-left max-w-md">
+                      <h3 className="font-bold text-lg truncate">
+                        {featuredBooks[currentFeaturedIndex]?.title || 'Livre en vedette'}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        par {featuredBooks[currentFeaturedIndex]?.author || 'Auteur inconnu'}
+                      </p>
+                      <div className="flex items-center justify-center md:justify-start gap-2 mt-2">
+                        <Badge variant="secondary" className="text-xs">
+                          {featuredBooks[currentFeaturedIndex]?.category || 'Général'}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {featuredBooks[currentFeaturedIndex]?.rating || '4.5'} ⭐
+                        </span>
+                      </div>
+                      <p className="text-sm mt-2 line-clamp-2">
+                        {featuredBooks[currentFeaturedIndex]?.description || 
+                         'Découvrez ce livre exceptionnel dès maintenant !'}
+                      </p>
+                    </div>
+                  </motion.div>
+                </div>
+                
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={nextFeaturedBook}
+                  className="h-8 w-8 p-0"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+              
+              {/* Indicateurs de progression */}
+              <div className="flex justify-center gap-1 mt-4">
+                {featuredBooks.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentFeaturedIndex(index)}
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                      index === currentFeaturedIndex 
+                        ? 'bg-primary w-6' 
+                        : 'bg-border hover:bg-primary/50'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Main Content */}
         <main className="container mx-auto px-4 py-8">
