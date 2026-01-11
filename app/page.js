@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Filter, BookOpen, Sparkles, ChevronLeft, ChevronRight, X, Volume2, Image as ImageIcon } from 'lucide-react';
+import { Search, Filter, BookOpen, Sparkles, ChevronLeft, ChevronRight, X, Volume2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -40,12 +40,18 @@ export default function Home() {
   useEffect(() => {
     fetchCategories();
     fetchAuthors();
-    fetchFeaturedBooks();
   }, []);
 
   useEffect(() => {
     fetchBooks();
   }, [pagination.page, searchQuery, selectedCategory, selectedAuthor]);
+
+  useEffect(() => {
+    // Sélectionner 5 livres au hasard parmi tous les livres chargés
+    if (books.length > 0 && featuredBooks.length === 0) {
+      selectRandomFeaturedBooks();
+    }
+  }, [books]);
 
   // Timer pour changer le livre mis en avant automatiquement
   useEffect(() => {
@@ -84,15 +90,22 @@ export default function Home() {
     }
   };
 
-  const fetchFeaturedBooks = async () => {
-    try {
-      // On récupère des livres au hasard pour la section publicitaire
-      const res = await fetch('/api/books?limit=5&random=true');
-      const data = await res.json();
-      setFeaturedBooks(data.books || []);
-    } catch (error) {
-      console.error('Erreur lors du chargement des livres mis en avant:', error);
+  // Fonction pour sélectionner 5 livres au hasard
+  const selectRandomFeaturedBooks = () => {
+    if (books.length === 0) return;
+    
+    // Copier le tableau de livres
+    const shuffled = [...books];
+    
+    // Mélanger le tableau (algorithme de Fisher-Yates)
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
+    
+    // Prendre les 5 premiers livres (max)
+    const randomBooks = shuffled.slice(0, Math.min(5, shuffled.length));
+    setFeaturedBooks(randomBooks);
   };
 
   const fetchCategories = async () => {
@@ -120,6 +133,10 @@ export default function Home() {
     setSelectedCategory('all');
     setSelectedAuthor('all');
     setPagination({ ...pagination, page: 1 });
+    // Re-sélectionner des livres aléatoires après avoir effacé les filtres
+    if (books.length > 0) {
+      selectRandomFeaturedBooks();
+    }
   };
 
   const handlePageChange = (newPage) => {
@@ -175,11 +192,11 @@ export default function Home() {
                   <p className="text-xs text-muted-foreground">Découvrez une nouvelle façon de lire</p>
                 </div>
               </div>
-              <Link href="/admin">
+            /*  <Link href="/admin">
                 <Button variant="outline" size="sm">
                   Admin
                 </Button>
-              </Link>
+              </Link>*/
             </div>
           </div>
         </header>
@@ -235,18 +252,15 @@ export default function Home() {
                     {/* Couverture du livre */}
                     <div className="relative group">
                       <div className={`w-32 h-48 rounded-xl shadow-lg overflow-hidden ${
-                        featuredBooks[currentFeaturedIndex]?.coverUrl 
+                        featuredBooks[currentFeaturedIndex]?.coverImage 
                           ? 'bg-card' 
                           : `bg-gradient-to-br ${getDefaultCoverColor(featuredBooks[currentFeaturedIndex]?.category)}`
                       }`}>
                         {featuredBooks[currentFeaturedIndex]?.coverImage ? (
-                          <Image
+                          <img
                             src={featuredBooks[currentFeaturedIndex].coverImage}
                             alt={featuredBooks[currentFeaturedIndex]?.title || 'Couverture du livre'}
-                            width={128}
-                            height={192}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            priority
                           />
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center p-4">
@@ -313,10 +327,12 @@ export default function Home() {
                       </p>
                       
                       <div className="flex items-center justify-center md:justify-start gap-3">
-                        <Button size="sm" className="gap-2">
-                          <BookOpen className="w-4 h-4" />
-                          Découvrir
-                        </Button>
+                        <Link href={`/book/${featuredBooks[currentFeaturedIndex]?.id}`}>
+                          <Button size="sm" className="gap-2">
+                            <BookOpen className="w-4 h-4" />
+                            Découvrir
+                          </Button>
+                        </Link>
                         <Button size="sm" variant="outline" className="gap-2">
                           <span className="text-lg">❤️</span>
                           Favoris
