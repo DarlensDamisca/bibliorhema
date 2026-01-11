@@ -239,9 +239,9 @@ export default function Home() {
                           ? 'bg-card' 
                           : `bg-gradient-to-br ${getDefaultCoverColor(featuredBooks[currentFeaturedIndex]?.category)}`
                       }`}>
-                        {featuredBooks[currentFeaturedIndex]?.coverUrl ? (
+                        {featuredBooks[currentFeaturedIndex]?.coverImage ? (
                           <Image
-                            src={featuredBooks[currentFeaturedIndex].coverUrl}
+                            src={featuredBooks[currentFeaturedIndex].coverImage}
                             alt={featuredBooks[currentFeaturedIndex]?.title || 'Couverture du livre'}
                             width={128}
                             height={192}
