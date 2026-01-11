@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Filter, BookOpen, Sparkles, ChevronLeft, ChevronRight, X, Volume2 } from 'lucide-react';
+import { Search, Filter, BookOpen, Sparkles, ChevronLeft, ChevronRight, X, Volume2, Image as ImageIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,6 +12,7 @@ import SpotlightCard from '@/components/SpotlightCard';
 import SpotlightBackground from '@/components/SpotlightBackground';
 import LoadingSkeleton from '@/components/LoadingSkeleton';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Home() {
   const [books, setBooks] = useState([]);
@@ -137,6 +139,19 @@ export default function Home() {
     );
   };
 
+  // Fonction pour obtenir une image de couverture par défaut basée sur la catégorie
+  const getDefaultCoverColor = (category) => {
+    const colors = {
+      'fiction': 'from-blue-500/20 to-indigo-500/20',
+      'science': 'from-green-500/20 to-emerald-500/20',
+      'history': 'from-amber-500/20 to-orange-500/20',
+      'philosophy': 'from-purple-500/20 to-pink-500/20',
+      'audio': 'from-red-500/20 to-rose-500/20',
+      'chat': 'from-cyan-500/20 to-teal-500/20'
+    };
+    return colors[category?.toLowerCase()] || 'from-primary/20 to-secondary/20';
+  };
+
   return (
     <div className="min-h-screen relative">
       {/* Spotlight Background */}
@@ -215,38 +230,98 @@ export default function Home() {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.3 }}
-                    className="flex flex-col md:flex-row items-center justify-center gap-4"
+                    className="flex flex-col md:flex-row items-center justify-center gap-6"
                   >
-                    <div className="relative">
-                      <div className="w-16 h-20 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center shadow-md">
-                        <BookOpen className="w-8 h-8 text-primary/70" />
+                    {/* Couverture du livre */}
+                    <div className="relative group">
+                      <div className={`w-32 h-48 rounded-xl shadow-lg overflow-hidden ${
+                        featuredBooks[currentFeaturedIndex]?.coverUrl 
+                          ? 'bg-card' 
+                          : `bg-gradient-to-br ${getDefaultCoverColor(featuredBooks[currentFeaturedIndex]?.category)}`
+                      }`}>
+                        {featuredBooks[currentFeaturedIndex]?.coverUrl ? (
+                          <Image
+                            src={featuredBooks[currentFeaturedIndex].coverUrl}
+                            alt={featuredBooks[currentFeaturedIndex]?.title || 'Couverture du livre'}
+                            width={128}
+                            height={192}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            priority
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center p-4">
+                            <BookOpen className="w-12 h-12 text-primary/50 mb-2" />
+                            <span className="text-xs text-center text-muted-foreground">
+                              {featuredBooks[currentFeaturedIndex]?.title?.substring(0, 20) || 'Pas de couverture'}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      {featuredBooks[currentFeaturedIndex]?.type === 'audio' && (
-                        <div className="absolute -top-1 -right-1 bg-blue-500 text-white rounded-full p-1">
-                          <Volume2 className="w-3 h-3" />
-                        </div>
-                      )}
+                      
+                      {/* Badge type de livre */}
+                      <div className="absolute -top-2 -right-2">
+                        {featuredBooks[currentFeaturedIndex]?.type === 'audio' ? (
+                          <div className="bg-blue-500 text-white rounded-full p-2 shadow-lg">
+                            <Volume2 className="w-4 h-4" />
+                          </div>
+                        ) : featuredBooks[currentFeaturedIndex]?.type === 'chat' ? (
+                          <div className="bg-green-500 text-white rounded-full p-2 shadow-lg">
+                            <span className="text-xs font-bold">💬</span>
+                          </div>
+                        ) : (
+                          <div className="bg-primary text-white rounded-full p-2 shadow-lg">
+                            <BookOpen className="w-4 h-4" />
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Effet de brillance */}
+                      <div className="absolute inset-0 rounded-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
+                      </div>
                     </div>
                     
+                    {/* Informations du livre */}
                     <div className="text-center md:text-left max-w-md">
-                      <h3 className="font-bold text-lg truncate">
+                      <h3 className="font-bold text-xl mb-1 line-clamp-1">
                         {featuredBooks[currentFeaturedIndex]?.title || 'Livre en vedette'}
                       </h3>
-                      <p className="text-sm text-muted-foreground">
-                        par {featuredBooks[currentFeaturedIndex]?.author || 'Auteur inconnu'}
+                      <p className="text-muted-foreground mb-3">
+                        par <span className="font-medium text-foreground">
+                          {featuredBooks[currentFeaturedIndex]?.author || 'Auteur inconnu'}
+                        </span>
                       </p>
-                      <div className="flex items-center justify-center md:justify-start gap-2 mt-2">
+                      
+                      <div className="flex items-center justify-center md:justify-start gap-2 mb-3 flex-wrap">
                         <Badge variant="secondary" className="text-xs">
                           {featuredBooks[currentFeaturedIndex]?.category || 'Général'}
                         </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {featuredBooks[currentFeaturedIndex]?.rating || '4.5'} ⭐
-                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-yellow-500">⭐</span>
+                          <span className="text-sm font-medium">
+                            {featuredBooks[currentFeaturedIndex]?.rating || '4.5'}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            ({featuredBooks[currentFeaturedIndex]?.reviews || '25'} avis)
+                          </span>
+                        </div>
                       </div>
-                      <p className="text-sm mt-2 line-clamp-2">
+                      
+                      <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
                         {featuredBooks[currentFeaturedIndex]?.description || 
-                         'Découvrez ce livre exceptionnel dès maintenant !'}
+                         'Découvrez ce livre exceptionnel dès maintenant ! Plongez dans une aventure captivante...'}
                       </p>
+                      
+                      <div className="flex items-center justify-center md:justify-start gap-3">
+                        <Button size="sm" className="gap-2">
+                          <BookOpen className="w-4 h-4" />
+                          Découvrir
+                        </Button>
+                        <Button size="sm" variant="outline" className="gap-2">
+                          <span className="text-lg">❤️</span>
+                          Favoris
+                        </Button>
+                      </div>
                     </div>
                   </motion.div>
                 </div>
@@ -262,19 +337,25 @@ export default function Home() {
               </div>
               
               {/* Indicateurs de progression */}
-              <div className="flex justify-center gap-1 mt-4">
+              <div className="flex justify-center gap-1 mt-6">
                 {featuredBooks.map((_, index) => (
                   <button
                     key={index}
                     onClick={() => setCurrentFeaturedIndex(index)}
-                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                    className={`h-1 rounded-full transition-all duration-300 ${
                       index === currentFeaturedIndex 
-                        ? 'bg-primary w-6' 
-                        : 'bg-border hover:bg-primary/50'
+                        ? 'bg-primary w-8' 
+                        : 'bg-border w-3 hover:bg-primary/50 hover:w-4'
                     }`}
+                    aria-label={`Voir le livre ${index + 1}`}
                   />
                 ))}
               </div>
+              
+              {/* Mini info de navigation */}
+              <p className="text-center text-xs text-muted-foreground mt-2">
+                {currentFeaturedIndex + 1} / {featuredBooks.length} • Changement automatique dans 8s
+              </p>
             </div>
           </motion.div>
         )}
