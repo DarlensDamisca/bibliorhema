@@ -192,11 +192,11 @@ export default function Home() {
                   <p className="text-xs text-muted-foreground">Découvrez une nouvelle façon de lire</p>
                 </div>
               </div>
-            /*  <Link href="/admin">
+  {/*  <Link href="/admin">
                 <Button variant="outline" size="sm">
                   Admin
                 </Button>
-              </Link>*/
+              </Link>*/}
             </div>
           </div>
         </header>
@@ -316,7 +316,7 @@ export default function Home() {
                             {featuredBooks[currentFeaturedIndex]?.rating || '4.5'}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            ({featuredBooks[currentFeaturedIndex]?.reviews || '25'} avis)
+                            ({featuredBooks[currentFeaturedIndex]?.reviews || ' '} avis)
                           </span>
                         </div>
                       </div>
