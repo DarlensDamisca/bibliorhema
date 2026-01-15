@@ -9,13 +9,7 @@
   "functions": {
     "api/**/*.js": {
       "maxDuration": 30,
-      "memory": 1024,
-      "maxRequestBodySize": 52428800
-    },
-    "api/route.js": {
-      "maxDuration": 30,
-      "memory": 1024,
-      "maxRequestBodySize": 52428800
+      "memory": 1024
     }
   },
   "headers": [
@@ -39,6 +33,20 @@
           "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version"
         }
       ]
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/upload",
+      "dest": "/api/route.js",
+      "methods": ["POST"],
+      "headers": {
+        "Content-Type": "multipart/form-data"
+      }
+    },
+    {
+      "src": "/api/.*",
+      "dest": "/api/route.js"
     }
   ]
 }
